@@ -3,6 +3,7 @@ package googlecompute
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/mitchellh/packer/common"
@@ -12,6 +13,8 @@ import (
 	"github.com/mitchellh/packer/packer"
 	"github.com/mitchellh/packer/template/interpolate"
 )
+
+var reImageFamily = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
 
 // Config is the configuration structure for the GCE builder. It stores
 // both the publicly settable state as well as the privately generated
@@ -23,24 +26,26 @@ type Config struct {
 	AccountFile string `mapstructure:"account_file"`
 	ProjectId   string `mapstructure:"project_id"`
 
+	Address              string            `mapstructure:"address"`
 	DiskName             string            `mapstructure:"disk_name"`
 	DiskSizeGb           int64             `mapstructure:"disk_size"`
 	DiskType             string            `mapstructure:"disk_type"`
 	ImageName            string            `mapstructure:"image_name"`
 	ImageDescription     string            `mapstructure:"image_description"`
+	ImageFamily          string            `mapstructure:"image_family"`
 	InstanceName         string            `mapstructure:"instance_name"`
 	MachineType          string            `mapstructure:"machine_type"`
 	Metadata             map[string]string `mapstructure:"metadata"`
 	Network              string            `mapstructure:"network"`
-	Subnetwork           string            `mapstructure:"subnetwork"`
-	Address              string            `mapstructure:"address"`
 	Preemptible          bool              `mapstructure:"preemptible"`
+	RawStateTimeout      string            `mapstructure:"state_timeout"`
+	Region               string            `mapstructure:"region"`
 	SourceImage          string            `mapstructure:"source_image"`
 	SourceImageProjectId string            `mapstructure:"source_image_project_id"`
-	RawStateTimeout      string            `mapstructure:"state_timeout"`
+	StartupScriptFile    string            `mapstructure:"startup_script_file"`
+	Subnetwork           string            `mapstructure:"subnetwork"`
 	Tags                 []string          `mapstructure:"tags"`
 	UseInternalIP        bool              `mapstructure:"use_internal_ip"`
-	Region               string            `mapstructure:"region"`
 	Zone                 string            `mapstructure:"zone"`
 
 	account         accountFile
@@ -91,6 +96,19 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 		} else {
 			c.ImageName = img
 		}
+	}
+
+	if len(c.ImageFamily) > 63 {
+		errs = packer.MultiErrorAppend(errs,
+			errors.New("Invalid image family: Must not be longer than 63 characters"))
+	}
+
+	if c.ImageFamily != "" {
+		if !reImageFamily.MatchString(c.ImageFamily) {
+			errs = packer.MultiErrorAppend(errs,
+				errors.New("Invalid image family: The first character must be a lowercase letter, and all following characters must be a dash, lowercase letter, or digit, except the last character, which cannot be a dash"))
+		}
+
 	}
 
 	if c.InstanceName == "" {
